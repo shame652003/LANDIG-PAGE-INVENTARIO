@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Repuestos de Moto Y.A - Sistema de Inventario y Cotización</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header id="app-header">
+        <div class="header-top">
+            <div class="header-brand">
+                <img src="img/logo-Yuran.png" alt="INVENMAX" class="logo" id="header-logo">
+                <div class="brand-text">
+                    <h1 class="brand-title">Repuestos de Moto Y.A</h1>
+                    <span class="brand-sub">INVENTARIO Y COTIZACIÓN</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button id="btn-edit-rates" class="btn-icon" title="Editar Tasas">⚙️ Tasas</button>
+                <button id="btn-cart-open" class="btn-icon cart-btn-header">🛒 <span id="cart-count-header" class="badge">0</span></button>
+            </div>
+        </div>
+        <div class="rates-ticker" id="rates-ticker"></div>
+    </header>
+
+    <nav id="app-nav">
+        <button class="nav-tab active" data-tab="search">🔍 Búsqueda Rápida</button>
+        <button class="nav-tab" data-tab="inventory">📋 Inventario</button>
+        <button class="nav-tab" data-tab="entry">📦 Entrada</button>
+        <button class="nav-tab" data-tab="backup">💾 Respaldo</button>
+    </nav>
+
+    <main id="app-main">
+        <section id="tab-search" class="tab-content active">
+            <div class="search-bar-container">
+                <div class="search-input-wrap">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="search-input" placeholder="Buscar por código o descripción..." autocomplete="off">
+                    <button id="search-clear" class="search-clear" style="display:none;">✕</button>
+                </div>
+            </div>
+            <div id="search-results" class="card-grid"></div>
+            <div id="search-empty" class="empty-state" style="display:none;">
+                <div class="empty-icon">🔍</div>
+                <p>Escribe un código o descripción para buscar productos</p>
+            </div>
+            <div id="search-no-results" class="empty-state" style="display:none;">
+                <div class="empty-icon">😕</div>
+                <p>No se encontraron resultados</p>
+            </div>
+        </section>
+
+        <section id="tab-inventory" class="tab-content">
+            <div class="inventory-controls">
+                <div class="search-input-wrap inv-search-wrap">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="inv-search" placeholder="Filtrar inventario...">
+                </div>
+                <select id="inv-sort">
+                    <option value="code-asc">Código A-Z</option>
+                    <option value="code-desc">Código Z-A</option>
+                    <option value="desc-asc">Descripción A-Z</option>
+                    <option value="qty-asc">Stock ↑</option>
+                    <option value="qty-desc">Stock ↓</option>
+                    <option value="cost-asc">Costo ↑</option>
+                    <option value="cost-desc">Costo ↓</option>
+                </select>
+                <button id="btn-toggle-edit" class="btn-lock unlocked" title="Deshabilitar edición">🔓 Editar</button>
+            </div>
+            <div class="table-wrapper">
+                <table id="inventory-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Descripción</th>
+                            <th>Cant.</th>
+                            <th>Costo $</th>
+                            <th>P.Sug. $</th>
+                            <th>P.Final $</th>
+                            <th>Ganancia $</th>
+                            <th>P.Sug. Bs</th>
+                            <th>P.Final Bs</th>
+                            <th>Ganancia Bs</th>
+                            <th>Ref.BCV $</th>
+                            <th>Compra Bs</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-body"></tbody>
+                </table>
+            </div>
+            <div id="inventory-pagination" class="pagination"></div>
+        </section>
+
+        <section id="tab-entry" class="tab-content">
+            <div class="entry-panel">
+                <form id="entry-form" class="entry-form glass-card">
+                    <h2>Registro de Entrada de Productos</h2>
+                    <p class="form-hint">Si el código ya existe, se sumará al stock existente.</p>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="entry-code">Código</label>
+                            <input type="text" id="entry-code" required placeholder="Ej: ACEI0001">
+                        </div>
+                        <div class="form-group">
+                            <label for="entry-desc">Descripción</label>
+                            <input type="text" id="entry-desc" required placeholder="Descripción del producto">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="entry-qty">Cantidad</label>
+                            <input type="number" id="entry-qty" min="1" step="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="entry-cost">Costo (USD)</label>
+                            <input type="number" id="entry-cost" min="0" step="0.01" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary btn-block">Registrar Entrada</button>
+                </form>
+                <div class="entry-log glass-card">
+                    <h3>Bitácora de Entradas</h3>
+                    <div id="entry-log-list"></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="tab-backup" class="tab-content">
+            <div class="backup-panel glass-card">
+                <div class="backup-icon">💾</div>
+                <h2>Copia de Seguridad</h2>
+                <p>Exporta toda la base de datos a un archivo JSON o importa un respaldo previo para restaurar los datos.</p>
+                <div class="backup-actions">
+                    <button id="btn-export" class="btn-primary">📥 Exportar JSON</button>
+                    <label class="btn-primary upload-label" for="btn-import-file">📤 Importar JSON<input type="file" id="btn-import-file" accept=".json" style="display:none;"></label>
+                </div>
+                <div id="backup-status" class="backup-status"></div>
+            </div>
+        </section>
+    </main>
+
+    <aside id="cart-panel" class="cart-panel">
+        <div class="cart-header">
+            <h2>🛒 Cotización</h2>
+            <button id="cart-close" class="cart-close-btn">✕</button>
+        </div>
+        <div id="cart-items" class="cart-items"></div>
+        <div id="cart-empty" class="cart-empty">El carrito está vacío</div>
+        <div class="cart-footer" id="cart-footer" style="display:none;">
+            <div class="cart-totals" id="cart-totals"></div>
+            <div class="cart-actions">
+                <button id="cart-clear" class="btn-secondary">🗑️ Vaciar</button>
+                <button id="cart-print" class="btn-secondary">🖨️ Imprimir</button>
+                <button id="cart-process" class="btn-primary">✅ Procesar Despacho</button>
+            </div>
+        </div>
+    </aside>
+    <div id="cart-overlay" class="cart-overlay"></div>
+
+    <button id="cart-fab" class="cart-fab">🛒 <span id="cart-count-fab">0</span></button>
+
+    <div id="rate-modal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content glass-card">
+            <h3>Editar Tasas e Índices</h3>
+            <form id="rate-form">
+                <div class="form-group">
+                    <label for="rate-margen-divisas">Margen Divisas (%)</label>
+                    <input type="number" id="rate-margen-divisas" step="0.01" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="rate-margen-bs">Margen Bolívares (%)</label>
+                    <input type="number" id="rate-margen-bs" step="0.01" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="rate-tasa-mult">Tasa Multiplicación (Bs/USD)</label>
+                    <input type="number" id="rate-tasa-mult" step="0.01" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="rate-tasa-div">Tasa División BCV (Bs/USD)</label>
+                    <input type="number" id="rate-tasa-div" step="0.01" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="rate-divisor-compra">Divisor Precio de Compra (Bs)</label>
+                    <input type="number" id="rate-divisor-compra" step="0.01" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="rate-fuente-bcv">Fuente BCV</label>
+                    <input type="text" id="rate-fuente-bcv">
+                </div>
+            </form>
+            <div class="modal-actions">
+                <button id="rate-cancel" class="btn-secondary">Cancelar</button>
+                <button id="rate-save" class="btn-primary">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <div id="print-area" class="print-area"></div>
+
+    <script src="js/data.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
