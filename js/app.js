@@ -2,7 +2,6 @@
     'use strict';
 
     const PRODUCTS_PER_PAGE = 20;
-    const LS_KEY = 'repuestos_moto_ya_state';
 
     function loadInitialData() {
         const raw = window.INITIAL_INVENTORY_DATA;
@@ -38,43 +37,15 @@
         editingLocked: true
     };
 
-    function saveState() {
-        try {
-            var toSave = {
-                products: state.products,
-                settings: state.settings,
-                entryLog: state.entryLog
-            };
-            localStorage.setItem(LS_KEY, JSON.stringify(toSave));
-        } catch (e) { /* ignore */ }
-    }
-
-    function loadState() {
-        try {
-            var saved = localStorage.getItem(LS_KEY);
-            if (saved) {
-                var parsed = JSON.parse(saved);
-                if (parsed.products && parsed.products.length > 0) {
-                    state.products = parsed.products;
-                    state.settings = Object.assign({}, defaultSettings, parsed.settings || {});
-                    state.entryLog = parsed.entryLog || [];
-                    return true;
-                }
-            }
-        } catch (e) { /* ignore */ }
-        return false;
-    }
-
     function initApp() {
-        if (!loadState()) {
-            var initial = loadInitialData();
-            state.products = initial.products;
-            state.settings = Object.assign({}, defaultSettings, initial.settings);
-            state.entryLog = initial.entradas || [];
-        }
+        var initial = loadInitialData();
+        state.settings = Object.assign({}, defaultSettings, initial.settings);
+        state.products = initial.products;
+        state.entryLog = initial.entradas || [];
         state.cart = [];
         renderAll();
         bindEvents();
+        fetchBCVRateOnLoad();
     }
 
     function calcPrices(product) {
@@ -465,12 +436,14 @@
         });
 
         state.cart = [];
-        saveState();
         renderCart();
         updateCartCount();
         renderSearch();
         renderInventory();
-        showToast('Despacho procesado correctamente. Stock actualizado.', 'success');
+        showChangesDownloadPrompt(
+            'Despacho procesado',
+            'Stock actualizado en esta sesión. Para que los cambios persistan al recargar la página, descarga el archivo <strong>data.js</strong> y reemplázalo en la carpeta <code>js/</code>.'
+        );
     }
 
     function printCart() {
@@ -548,15 +521,86 @@
         }
 
         state.entryLog.push(logEntry);
-        saveState();
         renderAll();
         showToast(logEntry.status, 'success');
+        showChangesDownloadPrompt(
+            'Entrada registrada',
+            'El inventario se actualizó en esta sesión. Para que los cambios persistan al recargar la página, descarga el archivo <strong>data.js</strong> y reemplázalo en la carpeta <code>js/</code>.'
+        );
     }
 
     function toggleEditing() {
         state.editingLocked = !state.editingLocked;
         renderInventory();
         showToast(state.editingLocked ? 'Edición bloqueada' : 'Edición habilitada', 'info');
+    }
+
+    function fetchBCVRate() {
+        var multInput = document.getElementById('rate-tasa-mult');
+        var divInput = document.getElementById('rate-tasa-div');
+        var fuenteInput = document.getElementById('rate-fuente-bcv');
+        var btn = document.getElementById('btn-fetch-bcv');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Obteniendo...';
+        }
+        fetch('https://ve.dolarapi.com/v1/dolares/oficial')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data && data.promedio) {
+                    if (multInput) multInput.value = data.promedio;
+                    if (divInput) divInput.value = data.promedio;
+                    if (data.fechaActualizacion) {
+                        var fecha = new Date(data.fechaActualizacion);
+                        var dia = String(fecha.getDate()).padStart(2, '0');
+                        var mes = String(fecha.getMonth() + 1).padStart(2, '0');
+                        var anio = fecha.getFullYear();
+                        if (fuenteInput) fuenteInput.value = 'BCV Venezuela, ' + dia + '/' + mes + '/' + anio;
+                    } else {
+                        var ahora = new Date();
+                        var dia2 = String(ahora.getDate()).padStart(2, '0');
+                        var mes2 = String(ahora.getMonth() + 1).padStart(2, '0');
+                        if (fuenteInput) fuenteInput.value = 'BCV Venezuela, ' + dia2 + '/' + mes2 + '/' + ahora.getFullYear();
+                    }
+                    showToast('Tasa BCV actualizada: ' + data.promedio + ' Bs/$', 'success');
+                } else {
+                    showToast('Respuesta inesperada de la API BCV', 'error');
+                }
+            })
+            .catch(function () {
+                showToast('No se pudo obtener la tasa BCV. Revisa tu conexión.', 'error');
+            })
+            .finally(function () {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '\u21bb Obtener tasa BCV';
+                }
+            });
+    }
+
+    function fetchBCVRateOnLoad() {
+        fetch('https://ve.dolarapi.com/v1/dolares/oficial')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data && data.promedio) {
+                    state.settings.tasa_mult = data.promedio;
+                    state.settings.tasa_div = data.promedio;
+                    if (data.fechaActualizacion) {
+                        var fecha = new Date(data.fechaActualizacion);
+                        var dia = String(fecha.getDate()).padStart(2, '0');
+                        var mes = String(fecha.getMonth() + 1).padStart(2, '0');
+                        var anio = fecha.getFullYear();
+                        state.settings.fuente_bcv = 'BCV Venezuela, ' + dia + '/' + mes + '/' + anio;
+                    } else {
+                        var ahora = new Date();
+                        var dia2 = String(ahora.getDate()).padStart(2, '0');
+                        var mes2 = String(ahora.getMonth() + 1).padStart(2, '0');
+                        state.settings.fuente_bcv = 'BCV Venezuela, ' + dia2 + '/' + mes2 + '/' + ahora.getFullYear();
+                    }
+                    renderAll();
+                }
+            })
+            .catch(function () { });
     }
 
     function openRateModal() {
@@ -568,6 +612,7 @@
         document.getElementById('rate-divisor-compra').value = s.divisor_compra;
         document.getElementById('rate-fuente-bcv').value = s.fuente_bcv || '';
         document.getElementById('rate-modal').classList.add('visible');
+        fetchBCVRate();
     }
 
     function closeRateModal() {
@@ -582,10 +627,73 @@
         s.tasa_div = parseFloat(document.getElementById('rate-tasa-div').value);
         s.divisor_compra = parseFloat(document.getElementById('rate-divisor-compra').value);
         s.fuente_bcv = document.getElementById('rate-fuente-bcv').value;
-        saveState();
-        closeRateModal();
         renderAll();
-        showToast('Tasas actualizadas. Todos los precios recalculados.', 'success');
+        closeRateModal();
+        showRatesDownloadPrompt();
+    }
+
+    function showChangesDownloadPrompt(title, message) {
+        var existingPrompt = document.getElementById('changes-download-toast');
+        if (existingPrompt) existingPrompt.remove();
+
+        var prompt = document.createElement('div');
+        prompt.id = 'changes-download-toast';
+        prompt.style.cssText = 'position:fixed;top:20px;right:20px;z-index:10001;background:rgba(15,20,35,0.97);border:1px solid var(--accent,#00d4ff);border-radius:12px;padding:18px 22px;max-width:380px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:inherit;color:#e0e0e0;';
+        prompt.innerHTML =
+            '<div style="font-size:0.95rem;font-weight:600;margin-bottom:8px;color:#00d4ff;">' + escapeHtml(title) + '</div>' +
+            '<div style="font-size:0.82rem;margin-bottom:14px;line-height:1.5;">' + message + '</div>' +
+            '<div style="display:flex;gap:10px;">' +
+            '<button id="btn-download-datajs" style="background:var(--accent,#00d4ff);color:#000;border:none;padding:8px 18px;border-radius:8px;cursor:pointer;font-weight:600;font-size:0.85rem;">Descargar data.js</button>' +
+            '<button id="btn-dismiss-download" style="background:transparent;color:#aaa;border:1px solid #555;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:0.85rem;">Cerrar</button>' +
+            '</div>';
+
+        document.body.appendChild(prompt);
+
+        document.getElementById('btn-download-datajs').addEventListener('click', function () {
+            downloadUpdatedDataJs();
+            prompt.remove();
+        });
+        document.getElementById('btn-dismiss-download').addEventListener('click', function () {
+            prompt.remove();
+        });
+
+        setTimeout(function () {
+            if (prompt.parentNode) prompt.remove();
+        }, 20000);
+    }
+
+    function showRatesDownloadPrompt() {
+        showChangesDownloadPrompt(
+            'Tasas actualizadas',
+            'Los precios se recalcularon en esta sesión. Para que los cambios persistan al recargar la página, descarga el archivo <strong>data.js</strong> y reemplázalo en la carpeta <code>js/</code>.'
+        );
+    }
+
+    function downloadUpdatedDataJs() {
+        var updatedData = {
+            settings: {
+                margen_divisas: state.settings.margen_divisas,
+                margen_bs: state.settings.margen_bs,
+                tasa_mult: state.settings.tasa_mult,
+                tasa_div: state.settings.tasa_div,
+                fuente_bcv: state.settings.fuente_bcv,
+                divisor_compra: state.settings.divisor_compra
+            },
+            products: state.products,
+            entradas: state.entryLog
+        };
+        var json = JSON.stringify(updatedData, null, 2);
+        var content = '/* Initial Data exported from Excel */\nwindow.INITIAL_INVENTORY_DATA = ' + json + ';\n';
+        var blob = new Blob([content], { type: 'application/javascript' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'data.js';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Archivo data.js descargado. Reemplázalo en la carpeta js/', 'success');
     }
 
     function exportBackup() {
@@ -621,8 +729,11 @@
                 state.products = data.products;
                 state.settings = Object.assign({}, defaultSettings, data.settings || {});
                 state.entryLog = data.entryLog || [];
-                saveState();
                 renderAll();
+                showChangesDownloadPrompt(
+                    'Backup importado',
+                    'Se cargaron ' + data.products.length + ' productos. Para que los cambios persistan al recargar la página, descarga el archivo <strong>data.js</strong> y reemplázalo en la carpeta <code>js/</code>.'
+                );
                 showToast('Backup importado correctamente. ' + data.products.length + ' productos cargados.', 'success');
             } catch (err) {
                 showToast('Error al importar: ' + err.message, 'error');
@@ -674,9 +785,9 @@
             product.price_final_bs_override = value === '' ? null : parseFloat(value);
         }
 
-        saveState();
         renderInventory();
         renderSearch();
+        showToast('Cambio guardado en memoria. Descarga data.js para persistir.', 'info');
     }
 
     function handleSearchClick(e) {
@@ -802,6 +913,7 @@
         document.getElementById('btn-edit-rates').addEventListener('click', openRateModal);
         document.getElementById('rate-cancel').addEventListener('click', closeRateModal);
         document.getElementById('rate-save').addEventListener('click', saveRates);
+        document.getElementById('btn-fetch-bcv').addEventListener('click', fetchBCVRate);
         document.getElementById('rate-modal').querySelector('.modal-overlay').addEventListener('click', closeRateModal);
 
         document.getElementById('btn-cart-open').addEventListener('click', openCart);
